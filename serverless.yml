@@ -1,0 +1,106 @@
+service: aws-cms-backend
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs14.x
+  region: us-east-1
+  httpApi:
+    cors: true
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action: 
+            - dynamodb:*
+          Resource:
+            - arn:aws:dynamodb:us-east-1:240415772733:table/EventsTable
+custom:
+  fileUploadBucketName: test-app-header-banner
+
+plugins:
+  - serverless-iam-roles-per-function
+
+functions:
+  addEvent:
+    handler: src/banners/addEvent.addEvent
+    events:
+      - httpApi:
+          path: /events
+          method: post
+  getEventById:
+    handler: src/banners/getEventById.getEventById
+    events:
+      - httpApi:
+          path: /events/{id}
+          method: get
+  getAllEvents:
+    handler: src/banners/getAllEvents.getAllEvents
+    events:
+      - httpApi:
+          path: /events
+          method: get
+  updateEvent:
+    handler: src/banners/updateEvent.updateEvent
+    events:
+      - httpApi:
+          path: /events/{id}
+          method: put
+  removeEvent:
+    handler: src/banners/removeEvent.removeEvent
+    events:
+      - httpApi:
+          path: /events/{id}
+          method: delete
+  deleteImage:
+    handler: src/s3/deleteImage.deleteImage
+    events:
+      - http:
+          path: /images/{id}/{extension}
+          method: delete
+          cors: true
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - "s3:DeleteObject"
+        Resource: arn:aws:s3:::test-app-header-banner/*
+    environment:
+      FILE_UPLOAD_BUCKET_NAME: test-app-header-banner
+  s3FileUploader:
+    handler: src/s3/uploadImageEvent.handler
+    name: s3-file-uploader
+    description: A lambda handler that uploads a file to an S3 bucket based on an API Gateway trigger.
+    timeout: 30 # seconds
+    memorySize: 128 # mb
+    events:
+      - http:
+          path: images
+          method: post
+          cors: true
+    iamRoleStatements:
+      - Effect: Allow
+        Action:
+          - "s3:Put*"
+        Resource: arn:aws:s3:::test-app-header-banner/*
+    environment:
+      FILE_UPLOAD_BUCKET_NAME: test-app-header-banner
+
+	
+resources: # CloudFormation template syntax
+  Resources:
+    FileBucket:
+        Type: AWS::S3::Bucket
+        Properties:
+          BucketName: test-app-header-banner
+          AccessControl: PublicRead
+    EventsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: EventsTable
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
